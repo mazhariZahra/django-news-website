@@ -1,0 +1,36 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سامانه مدیریت اخبار</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>سامانه مدیریت اخبار</h1>
+            <p>خوش آمدید به سامانه مدیریت اخبار. لطفاً وارد سیستم شوید.</p>
+        </header>
+        
+        <div class="main-menu">
+            <div class="card">
+                <h2>ورود به سیستم</h2>
+                <p>برای ورود به سامانه روی دکمه زیر کلیک کنید.</p>
+                <a href="{% url 'login' %}" class="btn">ورود / ثبت‌نام</a>
+            </div>
+            
+            <div class="card">
+                <h2>درباره سامانه</h2>
+                <p>این سامانه امکان مشاهده اخبار، مدیریت دسته‌های مورد علاقه و ویرایش اخبار را فراهم می‌کند.</p>
+                <p>اخبار به صورت خودکار هر ۳ ثانیه بروزرسانی می‌شوند.</p>
+            </div>
+        </div>
+        
+        <footer>
+            <p>سامانه خبری</p>
+        </footer>
+    </div>
+</body>
+</html>

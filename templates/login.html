@@ -1,0 +1,221 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ورود به سامانه</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ورود / ثبت‌نام در سامانه</h1>
+            <p>برای استفاده از سامانه لطفاً وارد شوید یا ثبت‌نام کنید.</p>
+        </header>
+        
+        <div class="navbar">
+            <ul>
+                <li><a href="{% url 'index' %}">صفحه اصلی</a></li>
+                <li><a href="{% url 'login' %}" class="active">ورود / ثبت‌نام</a></li>
+            </ul>
+        </div>
+        
+        <div class="form-container">
+            <div id="login-form">
+                <h2>ورود به حساب کاربری</h2>
+                <div class="form-group">
+                    <label for="username">نام کاربری:</label>
+                    <input type="text" id="username" class="form-control" placeholder="نام کاربری خود را وارد کنید">
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">کلمه عبور:</label>
+                    <input type="password" id="password" class="form-control" placeholder="کلمه عبور خود را وارد کنید">
+                </div>
+                
+                <button id="login-btn" class="btn">ورود</button>
+                <p id="login-message" class="message"></p>
+                
+                <p>حساب کاربری ندارید؟ <a href="#" id="show-register">ثبت‌نام کنید</a></p>
+            </div>
+            
+            <div id="register-form" style="display: none;">
+                <h2>ثبت‌نام کاربر جدید</h2>
+                <div class="form-group">
+                    <label for="reg-username">نام کاربری:</label>
+                    <input type="text" id="reg-username" class="form-control" placeholder="نام کاربری دلخواه را وارد کنید">
+                </div>
+                
+                <div class="form-group">
+                    <label for="reg-password">کلمه عبور:</label>
+                    <input type="password" id="reg-password" class="form-control" placeholder="کلمه عبور دلخواه را وارد کنید">
+                </div>
+                
+                <div class="form-group">
+                    <label for="reg-confirm">تأیید کلمه عبور:</label>
+                    <input type="password" id="reg-confirm" class="form-control" placeholder="کلمه عبور را مجدداً وارد کنید">
+                </div>
+                
+                <button id="register-btn" class="btn">ثبت‌نام</button>
+                <p id="register-message" class="message"></p>
+                
+                <p>قبلاً ثبت‌نام کرده‌اید؟ <a href="#" id="show-login">وارد شوید</a></p>
+            </div>
+        </div>
+        
+        <footer>
+            <p>سامانه خبری</p>
+        </footer>
+    </div>
+    
+    <script>
+        // تابع دریافت CSRF Token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        // تابع ارسال درخواست
+        async function sendRequest(url, data) {
+            try {
+                // مطمئن شو URL با اسلش پایانی است
+                if (!url.endsWith('/')) {
+                    url = url + '/';
+                }
+                
+                const csrftoken = getCookie('csrftoken');
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify(data)
+                });
+                return await response.json();
+            } catch (error) {
+                console.error('خطا در ارتباط با سرور:', error);
+                return { success: false, error: 'خطا در ارتباط با سرور' };
+            }
+        }
+        
+        // نمایش فرم ثبت‌نام
+        document.getElementById('show-register').addEventListener('click', function(e) {
+            e.preventDefault();
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('register-form').style.display = 'block';
+        });
+        
+        // نمایش فرم ورود
+        document.getElementById('show-login').addEventListener('click', function(e) {
+            e.preventDefault();
+            document.getElementById('register-form').style.display = 'none';
+            document.getElementById('login-form').style.display = 'block';
+        });
+        
+        // ورود به سیستم
+        document.getElementById('login-btn').addEventListener('click', async function() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                document.getElementById('login-message').textContent = 'لطفاً تمام فیلدها را پر کنید';
+                document.getElementById('login-message').style.color = 'red';
+                return;
+            }
+            
+            // ارسال درخواست به API با اسلش پایانی
+            const result = await sendRequest('/api/login/', {
+                username: username,
+                password: password
+            });
+            
+            if (result.success) {
+                document.getElementById('login-message').textContent = 'ورود موفقیت‌آمیز بود! در حال انتقال...';
+                document.getElementById('login-message').style.color = 'green';
+                
+                // انتقال به صفحه پیکربندی پس از 1 ثانیه
+                setTimeout(() => {
+                    window.location.href = '/config/';
+                }, 1000);
+            } else {
+                document.getElementById('login-message').textContent = result.error || 'ورود ناموفق بود';
+                document.getElementById('login-message').style.color = 'red';
+            }
+        });
+        
+        // ثبت‌نام کاربر جدید
+        document.getElementById('register-btn').addEventListener('click', async function() {
+            const username = document.getElementById('reg-username').value;
+            const password = document.getElementById('reg-password').value;
+            const confirm = document.getElementById('reg-confirm').value;
+            
+            if (!username || !password || !confirm) {
+                document.getElementById('register-message').textContent = 'لطفاً تمام فیلدها را پر کنید';
+                document.getElementById('register-message').style.color = 'red';
+                return;
+            }
+            
+            if (password !== confirm) {
+                document.getElementById('register-message').textContent = 'کلمه‌های عبور یکسان نیستند';
+                document.getElementById('register-message').style.color = 'red';
+                return;
+            }
+            
+            // ارسال درخواست به API با اسلش پایانی
+            const result = await sendRequest('/api/register/', {
+                username: username,
+                password: password,
+                confirm: confirm
+            });
+            
+            if (result.success) {
+                document.getElementById('register-message').textContent = 'ثبت‌نام موفقیت‌آمیز بود! در حال انتقال...';
+                document.getElementById('register-message').style.color = 'green';
+                
+                // انتقال به صفحه پیکربندی پس از 1 ثانیه
+                setTimeout(() => {
+                    window.location.href = '/config/';
+                }, 1000);
+            } else {
+                document.getElementById('register-message').textContent = result.error || 'ثبت‌نام ناموفق بود';
+                document.getElementById('register-message').style.color = 'red';
+            }
+        });
+        
+        // بررسی اگر کاربر قبلاً وارد شده است
+        async function checkAuth() {
+            try {
+                // با اسلش پایانی
+                const response = await fetch('/api/check-auth/');
+                const result = await response.json();
+                
+                if (result.authenticated) {
+                    document.getElementById('login-message').textContent = 'شما قبلاً وارد شده‌اید. در حال انتقال...';
+                    document.getElementById('login-message').style.color = 'green';
+                    
+                    setTimeout(() => {
+                        window.location.href = '/config/';
+                    }, 1500);
+                }
+            } catch (error) {
+                console.error('خطا در بررسی وضعیت:', error);
+            }
+        }
+        
+        // اجرای بررسی هنگام لود صفحه
+        checkAuth();
+    </script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ویرایش اخبار</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>سیستم خبری</h1>
+            <nav>
+                <ul>
+                    <li><a href="index.html">صفحه اصلی</a></li>
+                    <li><a href="login.html">ورود / ثبت‌نام</a></li>
+                    <li><a href="config.html">تنظیمات</a></li>
+                    <li><a href="news.html">مشاهده اخبار</a></li>
+                    <li><a href="edit.html" class="active">ویرایش اخبار</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+    
+    <main class="container">
+        <section class="edit-section">
+            <h2>مدیریت اخبار</h2>
+            <p>در این صفحه می‌توانید اخبار جدید اضافه، ویرایش یا حذف کنید.</p>
+            
+            <div class="edit-actions">
+                <button id="show-add-form" class="btn">اضافه کردن خبر جدید</button>
+                <button id="refresh-news" class="btn secondary">بروزرسانی لیست</button>
+            </div>
+            
+            <!-- فرم اضافه/ویرایش خبر -->
+            <div id="edit-form" class="hidden">
+                <h3 id="form-title">افزودن خبر جدید</h3>
+                <form id="newsForm">
+                    <input type="hidden" id="news-id">
+                    
+                    <div class="form-group">
+                        <label for="news-title">عنوان خبر:</label>
+                        <input type="text" id="news-title" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="news-body">متن خبر:</label>
+                        <textarea id="news-body" rows="6" required></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="news-class">دسته‌بندی خبر:</label>
+                        <select id="news-class" required>
+                            <option value="">انتخاب کنید</option>
+                            <option value="Technology">فناوری</option>
+                            <option value="Sports">ورزشی</option>
+                            <option value="Health">سلامت</option>
+                            <option value="Politics">سیاسی</option>
+                            <option value="Economics">اقتصادی</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" id="save-news" class="btn">ذخیره خبر</button>
+                        <button type="button" id="cancel-edit" class="btn secondary">لغو</button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- لیست اخبار برای ویرایش -->
+            <div class="news-list-container">
+                <h3>لیست اخبار موجود</h3>
+                <div id="edit-news-list">
+                    <!-- اخبار در اینجا نمایش داده می‌شوند -->
+                    <div class="loading">در حال بارگذاری اخبار...</div>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <footer>
+        <div class="container">
+            <p>پروژه سیستم خبری - طراحی شده برای دانشجویان</p>
+        </div>
+    </footer>
+    
+    <script src="script.js"></script>
+</body>
+</html>

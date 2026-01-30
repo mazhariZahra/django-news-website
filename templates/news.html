@@ -1,0 +1,278 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مشاهده اخبار</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>مشاهده اخبار</h1>
+            <p>دسته‌های خبری بر اساس بیشترین بازدید مرتب شده‌اند.</p>
+        </header>
+
+        <div class="navbar">
+            <ul>
+                <li><a href="{% url 'index' %}">صفحه اصلی</a></li>
+                <li><a href="{% url 'config' %}">پیکربندی</a></li>
+                <li><a href="{% url 'news' %}" class="active">مشاهده اخبار</a></li>
+                <li><a href="{% url 'edit_news' %}" target="_blank">ویرایش اخبار</a></li>
+                <li><a href="#" id="logout-btn">خروج</a></li>
+            </ul>
+        </div>
+
+        <div class="update-status">
+            <p>اخبار به صورت خودکار هر ۳ ثانیه بروزرسانی می‌شوند. آخرین بروزرسانی: <span id="last-update">هم اکنون</span></p>
+        </div>
+
+        <div id="news-container">
+            <p>در حال بارگذاری اخبار...</p>
+        </div>
+
+        <footer>
+            <p>سامانه خبری</p>
+        </footer>
+    </div>
+
+    <!-- پنجره نمایش خبر -->
+    <div id="news-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); z-index: 1000;">
+        <div style="background-color: white; margin: 5% auto; padding: 20px; width: 80%; max-width: 700px; border-radius: 8px; max-height: 80%; overflow-y: auto;">
+            <h2 id="modal-title">عنوان خبر</h2>
+            <div id="modal-body" style="margin: 20px 0;">
+                متن خبر در اینجا نمایش داده می‌شود.
+            </div>
+            <button id="close-modal" class="btn">بستن</button>
+        </div>
+    </div>
+
+    <script>
+        // تابع دریافت CSRF Token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        // تابع ارسال درخواست
+        async function sendRequest(url, data) {
+            try {
+                const csrftoken = getCookie('csrftoken');
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify(data)
+                });
+                return await response.json();
+            } catch (error) {
+                console.error('خطا در ارتباط با سرور:', error);
+                return { success: false, error: 'خطا در ارتباط با سرور' };
+            }
+        }
+        
+        // تابع بررسی احراز هویت
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/check-auth/');
+                const result = await response.json();
+                
+                if (!result.authenticated) {
+                    alert('لطفاً ابتدا وارد سیستم شوید');
+                    window.location.href = '/login/';
+                    return null;
+                }
+                
+                return result;
+            } catch (error) {
+                console.error('خطا در بررسی وضعیت:', error);
+                alert('خطا در ارتباط با سرور');
+                window.location.href = '/login/';
+                return null;
+            }
+        }
+        
+        // نمایش نام کاربر
+        async function loadUserInfo() {
+            const authResult = await checkAuth();
+            if (!authResult) return false;
+            
+            if (authResult.username) {
+                document.querySelector('header p').innerHTML =
+                    `خوش آمدید <strong>${authResult.username}</strong>! دسته‌های خبری بر اساس بیشترین بازدید مرتب شده‌اند.`;
+            }
+            
+            return authResult.categories || ['Technology'];
+        }
+        
+        // بارگذاری اخبار از سرور
+        async function loadNews() {
+            const categories = await loadUserInfo();
+            if (!categories) return;
+            
+            try {
+                // ساخت URL با پارامترهای دسته‌بندی
+                const categoriesParam = categories.map(cat => `category=${cat}`).join('&');
+                const url = `/api/news/${categoriesParam ? '?' + categoriesParam : ''}`;
+                
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                displayNews(result.news || []);
+            } catch (error) {
+                console.error('خطا در دریافت اخبار:', error);
+                document.getElementById('news-container').innerHTML = 
+                    '<p class="card">خطا در دریافت اخبار از سرور</p>';
+            }
+        }
+        
+        // نمایش اخبار
+        function displayNews(newsData) {
+            const newsContainer = document.getElementById('news-container');
+            
+            if (!newsData || newsData.length === 0) {
+                newsContainer.innerHTML = '<p class="card">هیچ خبری در سیستم وجود ندارد.</p>';
+                return;
+            }
+            
+            // گروه‌بندی اخبار بر اساس دسته
+            const groupedNews = {};
+            newsData.forEach(news => {
+                if (!groupedNews[news.NewsClass]) {
+                    groupedNews[news.NewsClass] = [];
+                }
+                groupedNews[news.NewsClass].push(news);
+            });
+            
+            // محاسبه مجموع ViewCounter برای هر دسته
+            const categoryTotals = {};
+            for (const category in groupedNews) {
+                const totalViews = groupedNews[category].reduce((sum, news) => sum + (news.ViewCounter || 0), 0);
+                categoryTotals[category] = totalViews;
+                
+                // مرتب‌سازی اخبار هر دسته
+                groupedNews[category].sort((a, b) => b.ViewCounter - a.ViewCounter);
+            }
+            
+            // مرتب کردن دسته‌ها بر اساس مجموع ViewCounter
+            const sortedCategories = Object.keys(groupedNews).sort((a, b) => {
+                return categoryTotals[b] - categoryTotals[a];
+            });
+            
+            // نمایش اخبار
+            let html = '';
+            
+            for (const category of sortedCategories) {
+                const totalViews = categoryTotals[category];
+                
+                html += `<div class="news-group">`;
+                html += `<h3>${category} (مجموع بازدید: ${totalViews})</h3>`;
+                
+                groupedNews[category].forEach(news => {
+                    html += `
+                    <div class="news-item" data-id="${news.NewsID}">
+                        <h4><a href="#" class="news-link" data-id="${news.NewsID}">${news.NewsTitle}</a></h4>
+                        <div class="news-meta">
+                            شناسه خبر: ${news.NewsID} | 
+                            دفعات مشاهده: <span class="view-counter">${news.ViewCounter}</span> |
+                            دسته: ${news.NewsClass}
+                        </div>
+                    </div>
+                    `;
+                });
+                
+                html += `</div>`;
+            }
+            
+            newsContainer.innerHTML = html;
+            
+            // بروزرسانی زمان آخرین بروزرسانی
+            const now = new Date();
+            document.getElementById('last-update').textContent = 
+                `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+            
+            // اضافه کردن رویداد کلیک به لینک‌های خبر
+            document.querySelectorAll('.news-link').forEach(link => {
+                link.addEventListener('click', async function(e) {
+                    e.preventDefault();
+                    const newsId = this.getAttribute('data-id');
+                    await showNewsDetails(newsId);
+                });
+            });
+        }
+        
+        // نمایش جزئیات خبر
+        async function showNewsDetails(newsId) {
+            try {
+                // افزایش تعداد بازدید
+                await sendRequest('/api/news/view/', { id: newsId });
+                
+                // دریافت اخبار مجدد برای نمایش متن کامل
+                const response = await fetch('/api/news/');
+                const result = await response.json();
+                
+                const news = (result.news || []).find(n => n.NewsID == newsId);
+                
+                if (news) {
+                    // نمایش خبر در مودال
+                    document.getElementById('modal-title').textContent = news.NewsTitle;
+                    document.getElementById('modal-body').textContent = news.NewsBody;
+                    document.getElementById('news-modal').style.display = 'block';
+                    
+                    // بارگذاری مجدد لیست اخبار
+                    loadNews();
+                }
+            } catch (error) {
+                console.error('خطا در نمایش جزئیات خبر:', error);
+                alert('خطا در نمایش خبر');
+            }
+        }
+        
+        // بستن پنجره مودال
+        document.getElementById('close-modal').addEventListener('click', function() {
+            document.getElementById('news-modal').style.display = 'none';
+        });
+        
+        // بستن مودال با کلیک خارج از آن
+        window.addEventListener('click', function(e) {
+            if (e.target == document.getElementById('news-modal')) {
+                document.getElementById('news-modal').style.display = 'none';
+            }
+        });
+        
+        // بارگذاری اولیه اخبار
+        document.addEventListener('DOMContentLoaded', function() {
+            loadNews();
+            
+            // بروزرسانی اخبار هر 3 ثانیه
+            setInterval(loadNews, 3000);
+        });
+        
+        // خروج از سیستم
+        document.getElementById('logout-btn').addEventListener('click', async function(e) {
+            e.preventDefault();
+            
+            try {
+                const response = await fetch('/logout/');
+                alert('با موفقیت از سیستم خارج شدید');
+                window.location.href = '/';
+            } catch (error) {
+                console.error('خطا در خروج:', error);
+            }
+        });
+    </script>
+</body>
+</html>

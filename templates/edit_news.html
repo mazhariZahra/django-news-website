@@ -1,0 +1,418 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ویرایش اخبار</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ویرایش اخبار</h1>
+            <p>در این صفحه می‌توانید اخبار را اضافه، ویرایش یا حذف کنید.</p>
+        </header>
+        
+        <div class="navbar">
+            <ul>
+                <li><a href="{% url 'index' %}">صفحه اصلی</a></li>
+                <li><a href="{% url 'config' %}">پیکربندی</a></li>
+                <li><a href="{% url 'news' %}">مشاهده اخبار</a></li>
+                <li><a href="{% url 'edit_news' %}" class="active">ویرایش اخبار</a></li>
+                <li><a href="#" id="logout-btn">خروج</a></li>
+            </ul>
+        </div>
+        
+        <div class="card">
+            <h2>افزودن خبر جدید</h2>
+            
+            <div class="form-group">
+                <label for="news-title">عنوان خبر:</label>
+                <input type="text" id="news-title" class="form-control" placeholder="عنوان خبر را وارد کنید">
+            </div>
+            
+            <div class="form-group">
+                <label for="news-body">متن خبر:</label>
+                <textarea id="news-body" class="form-control" rows="5" placeholder="متن خبر را وارد کنید"></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label for="news-class">دسته خبر:</label>
+                <select id="news-class" class="form-control">
+                    <option value="Technology">فناوری</option>
+                    <option value="Sports">ورزشی</option>
+                    <option value="Health">سلامتی</option>
+                    <option value="Economics">اقتصادی</option>
+                    <option value="Politics">سیاسی</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="news-viewcounter">دفعات مشاهده:</label>
+                <input type="number" id="news-viewcounter" class="form-control" value="0" min="0" style="width: 120px;">
+                <small>مقدار اولیه برای تعداد دفعات مشاهده خبر</small>
+            </div>
+            
+            <button id="add-news" class="btn">افزودن خبر</button>
+            <p id="add-message"></p>
+        </div>
+        
+        <div class="card">
+            <h2>لیست اخبار موجود</h2>
+            <p>برای ویرایش یا حذف خبر از این لیست استفاده کنید.</p>
+            
+            <div class="table-container">
+                <table id="news-table">
+                    <thead>
+                        <tr>
+                            <th>شناسه</th>
+                            <th>عنوان</th>
+                            <th>دسته</th>
+                            <th>دفعات مشاهده</th>
+                            <th>عملیات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="news-table-body">
+                        <!-- ردیف‌های جدول در اینجا بارگذاری می‌شوند -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <footer>
+            <p>سامانه خبری</p>
+        </footer>
+    </div>
+    
+    <script>
+        // تابع دریافت CSRF Token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        // تابع ارسال درخواست
+        async function sendRequest(url, data) {
+            try {
+                // مطمئن شو URL با اسلش پایانی است
+                if (!url.endsWith('/')) {
+                    url = url + '/';
+                }
+                
+                const csrftoken = getCookie('csrftoken');
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify(data)
+                });
+                return await response.json();
+            } catch (error) {
+                console.error('خطا در ارتباط با سرور:', error);
+                return { success: false, error: 'خطا در ارتباط با سرور' };
+            }
+        }
+        
+        // تابع دریافت داده
+        async function getData(url) {
+            try {
+                if (!url.endsWith('/')) {
+                    url = url + '/';
+                }
+                const response = await fetch(url);
+                return await response.json();
+            } catch (error) {
+                console.error('خطا در دریافت داده:', error);
+                return null;
+            }
+        }
+        
+        // تابع بررسی احراز هویت
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/check-auth/');
+                const result = await response.json();
+                
+                if (!result.authenticated) {
+                    alert('لطفاً ابتدا وارد سیستم شوید');
+                    window.location.href = '/login/';
+                    return null;
+                }
+                
+                return result;
+            } catch (error) {
+                console.error('خطا در بررسی وضعیت:', error);
+                alert('خطا در ارتباط با سرور');
+                window.location.href = '/login/';
+                return null;
+            }
+        }
+        
+        // ================ تابع بارگذاری همه اخبار ================
+        async function loadAllNews() {
+            const authResult = await checkAuth();
+            if (!authResult) return;
+            
+            const tableBody = document.getElementById('news-table-body');
+            
+            try {
+                // استفاده از پارامتر all=true برای دریافت همه اخبار
+                const result = await getData('/api/news/all/');
+                
+                if (!result || !result.news || result.news.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">هیچ خبری در سیستم وجود ندارد.</td></tr>';
+                    return;
+                }
+                
+                // مرتب‌سازی بر اساس ViewCounter
+                const newsArray = result.news.sort((a, b) => b.ViewCounter - a.ViewCounter);
+                
+                let html = '';
+                newsArray.forEach(news => {
+                    html += `
+                    <tr data-id="${news.NewsID}">
+                        <td>${news.NewsID}</td>
+                        <td>${news.NewsTitle}</td>
+                        <td>${news.NewsClass}</td>
+                        <td>${news.ViewCounter}</td>
+                        <td>
+                            <button class="btn edit-btn" data-id="${news.NewsID}" style="padding: 5px 10px; font-size: 14px; margin-left: 5px;">ویرایش</button>
+                            <button class="btn btn-secondary delete-btn" data-id="${news.NewsID}" style="padding: 5px 10px; font-size: 14px;">حذف</button>
+                        </td>
+                    </tr>
+                    `;
+                });
+                
+                tableBody.innerHTML = html;
+                
+                // اضافه کردن رویداد به دکمه‌های ویرایش
+                document.querySelectorAll('.edit-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const newsId = this.getAttribute('data-id');
+                        editNews(newsId, newsArray);
+                    });
+                });
+                
+                // اضافه کردن رویداد به دکمه‌های حذف
+                document.querySelectorAll('.delete-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const newsId = this.getAttribute('data-id');
+                        deleteNews(newsId);
+                    });
+                });
+                
+            } catch (error) {
+                console.error('خطا در بارگذاری اخبار:', error);
+                tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: red;">خطا در بارگذاری اخبار</td></tr>';
+            }
+        }
+        
+        // افزودن خبر جدید
+        document.getElementById('add-news').addEventListener('click', async function() {
+            const title = document.getElementById('news-title').value;
+            const body = document.getElementById('news-body').value;
+            const newsClass = document.getElementById('news-class').value;
+            const viewCounter = parseInt(document.getElementById('news-viewcounter').value) || 0;
+            
+            if (!title || !body || !newsClass) {
+                document.getElementById('add-message').textContent = 'لطفاً تمام فیلدها را پر کنید';
+                document.getElementById('add-message').style.color = 'red';
+                return;
+            }
+            
+            const result = await sendRequest('/api/news/add/', {
+                title: title,
+                body: body,
+                category: newsClass,
+                viewcounter: viewCounter
+            });
+            
+            if (result.success) {
+                document.getElementById('add-message').textContent = 'خبر با موفقیت اضافه شد!';
+                document.getElementById('add-message').style.color = 'green';
+                
+                // پاک کردن فرم
+                document.getElementById('news-title').value = '';
+                document.getElementById('news-body').value = '';
+                document.getElementById('news-class').value = 'Technology';
+                document.getElementById('news-viewcounter').value = '0';
+                
+                // بروزرسانی جدول
+                loadAllNews();
+                
+                // پاک کردن پیام بعد از 3 ثانیه
+                setTimeout(() => {
+                    document.getElementById('add-message').textContent = '';
+                }, 3000);
+            } else {
+                document.getElementById('add-message').textContent = 'خطا: ' + (result.error || 'خطای ناشناخته');
+                document.getElementById('add-message').style.color = 'red';
+            }
+        });
+        
+        // ویرایش خبر
+        async function editNews(newsId, newsArray) {
+            const news = newsArray.find(n => n.NewsID == newsId);
+            
+            if (!news) {
+                alert('خبر مورد نظر یافت نشد');
+                return;
+            }
+            
+            // پر کردن فرم با اطلاعات خبر
+            document.getElementById('news-title').value = news.NewsTitle;
+            document.getElementById('news-body').value = news.NewsBody;
+            document.getElementById('news-class').value = news.NewsClass;
+            document.getElementById('news-viewcounter').value = news.ViewCounter;
+            
+            // تغییر عملکرد دکمه افزودن به ویرایش
+            const addButton = document.getElementById('add-news');
+            addButton.textContent = 'ذخیره تغییرات';
+            
+            // حذف رویداد قبلی
+            addButton.replaceWith(addButton.cloneNode(true));
+            
+            // اضافه کردن رویداد جدید برای ذخیره تغییرات
+            document.getElementById('add-news').addEventListener('click', async function saveChanges() {
+                const title = document.getElementById('news-title').value;
+                const body = document.getElementById('news-body').value;
+                const newsClass = document.getElementById('news-class').value;
+                const viewCounter = parseInt(document.getElementById('news-viewcounter').value) || 0;
+                
+                if (!title || !body || !newsClass) {
+                    document.getElementById('add-message').textContent = 'لطفاً تمام فیلدها را پر کنید';
+                    document.getElementById('add-message').style.color = 'red';
+                    return;
+                }
+                
+                const result = await sendRequest('/api/news/edit/', {
+                    id: newsId,
+                    title: title,
+                    body: body,
+                    category: newsClass,
+                    viewcounter: viewCounter
+                });
+                
+                if (result.success) {
+                    document.getElementById('add-message').textContent = 'تغییرات با موفقیت ذخیره شد!';
+                    document.getElementById('add-message').style.color = 'green';
+                    
+                    // بازگرداندن دکمه به حالت عادی
+                    const saveButton = document.getElementById('add-news');
+                    saveButton.textContent = 'افزودن خبر';
+                    
+                    // حذف رویداد فعلی
+                    saveButton.replaceWith(saveButton.cloneNode(true));
+                    
+                    // اضافه کردن رویداد افزودن خبر جدید
+                    document.getElementById('add-news').addEventListener('click', async function() {
+                        const title = document.getElementById('news-title').value;
+                        const body = document.getElementById('news-body').value;
+                        const newsClass = document.getElementById('news-class').value;
+                        const viewCounter = parseInt(document.getElementById('news-viewcounter').value) || 0;
+                        
+                        if (!title || !body || !newsClass) {
+                            document.getElementById('add-message').textContent = 'لطفاً تمام فیلدها را پر کنید';
+                            document.getElementById('add-message').style.color = 'red';
+                            return;
+                        }
+                        
+                        const result = await sendRequest('/api/news/add/', {
+                            title: title,
+                            body: body,
+                            category: newsClass,
+                            viewcounter: viewCounter
+                        });
+                        
+                        if (result.success) {
+                            document.getElementById('add-message').textContent = 'خبر با موفقیت اضافه شد!';
+                            document.getElementById('add-message').style.color = 'green';
+                        } else {
+                            document.getElementById('add-message').textContent = 'خطا: ' + (result.error || 'خطای ناشناخته');
+                            document.getElementById('add-message').style.color = 'red';
+                        }
+                        
+                        // پاک کردن فرم
+                        document.getElementById('news-title').value = '';
+                        document.getElementById('news-body').value = '';
+                        document.getElementById('news-class').value = 'Technology';
+                        document.getElementById('news-viewcounter').value = '0';
+                        
+                        loadAllNews();
+                        
+                        setTimeout(() => {
+                            document.getElementById('add-message').textContent = '';
+                        }, 3000);
+                    });
+                    
+                    // پاک کردن فرم
+                    document.getElementById('news-title').value = '';
+                    document.getElementById('news-body').value = '';
+                    document.getElementById('news-class').value = 'Technology';
+                    document.getElementById('news-viewcounter').value = '0';
+                    
+                    // بروزرسانی جدول
+                    loadAllNews();
+                    
+                    // پاک کردن پیام بعد از 3 ثانیه
+                    setTimeout(() => {
+                        document.getElementById('add-message').textContent = '';
+                    }, 3000);
+                } else {
+                    document.getElementById('add-message').textContent = 'خطا: ' + (result.error || 'خطای ناشناخته');
+                    document.getElementById('add-message').style.color = 'red';
+                }
+            });
+        }
+        
+        // حذف خبر
+        async function deleteNews(newsId) {
+            if (!confirm('آیا از حذف این خبر مطمئن هستید؟')) {
+                return;
+            }
+            
+            const result = await sendRequest('/api/news/delete/', {
+                id: newsId
+            });
+            
+            if (result.success) {
+                alert('خبر با موفقیت حذف شد!');
+                loadAllNews();
+            } else {
+                alert('خطا در حذف خبر: ' + (result.error || 'خطای ناشناخته'));
+            }
+        }
+        
+        // خروج از سیستم
+        document.getElementById('logout-btn').addEventListener('click', async function(e) {
+            e.preventDefault();
+            
+            try {
+                const response = await fetch('/logout/');
+                alert('با موفقیت از سیستم خارج شدید');
+                window.location.href = '/';
+            } catch (error) {
+                console.error('خطا در خروج:', error);
+            }
+        });
+        
+        // بارگذاری اولیه جدول هنگام لود صفحه
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAllNews();
+        });
+    </script>
+</body>
+</html>

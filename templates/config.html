@@ -1,0 +1,249 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>پیکربندی دسته‌های خبر</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>پیکربندی دسته‌های خبر مورد علاقه</h1>
+            <p id="welcome-message">لطفاً دسته‌های خبری مورد علاقه خود را انتخاب کنید.</p>
+        </header>
+        
+        <div class="navbar">
+            <ul>
+                <li><a href="{% url 'index' %}">صفحه اصلی</a></li>
+                <li><a href="{% url 'config' %}" class="active">پیکربندی</a></li>
+                <li><a href="{% url 'news' %}">مشاهده اخبار</a></li>
+                <li><a href="{% url 'edit_news' %}">ویرایش اخبار</a></li>
+                <li><a href="#" id="logout-btn">خروج</a></li>
+            </ul>
+        </div>
+        
+        <div class="card">
+            <h2>دسته‌های خبری</h2>
+            <p>لطفاً دسته‌های خبری مورد علاقه خود را انتخاب کنید:</p>
+            
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="tech" value="Technology">
+                    <label for="tech">فناوری</label>
+                </div>
+                
+                <div class="checkbox-item">
+                    <input type="checkbox" id="sports" value="Sports">
+                    <label for="sports">ورزشی</label>
+                </div>
+                
+                <div class="checkbox-item">
+                    <input type="checkbox" id="health" value="Health">
+                    <label for="health">سلامتی</label>
+                </div>
+                
+                <div class="checkbox-item">
+                    <input type="checkbox" id="economics" value="Economics">
+                    <label for="economics">اقتصادی</label>
+                </div>
+                
+                <div class="checkbox-item">
+                    <input type="checkbox" id="politics" value="Politics">
+                    <label for="politics">سیاسی</label>
+                </div>
+            </div>
+            
+            <button id="save-config" class="btn">ذخیره تنظیمات</button>
+            <p id="config-message"></p>
+        </div>
+        
+        <footer>
+            <p>سامانه خبری</p>
+        </footer>
+    </div>
+    
+    <script>
+        // تابع دریافت CSRF Token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        // تابع بررسی احراز هویت
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/check-auth/');
+                const result = await response.json();
+                
+                if (!result.authenticated) {
+                    alert('لطفاً ابتدا وارد سیستم شوید');
+                    window.location.href = '/login/';
+                    return null;
+                }
+                
+                return result;
+            } catch (error) {
+                console.error('خطا در بررسی وضعیت:', error);
+                alert('خطا در ارتباط با سرور');
+                window.location.href = '/login/';
+                return null;
+            }
+        }
+        
+        // بارگذاری تنظیمات ذخیره شده از سرور
+        async function loadSavedCategories() {
+            try {
+                console.log('🔍 دریافت تنظیمات کاربر از سرور...');
+                const response = await fetch('/api/check-auth/');
+                const result = await response.json();
+                
+                console.log('📋 پاسخ سرور:', result);
+                
+                if (result.authenticated && result.username) {
+                    // نمایش نام کاربر
+                    document.getElementById('welcome-message').innerHTML = 
+                        `خوش آمدید <strong>${result.username}</strong>! لطفاً دسته‌های خبری مورد علاقه خود را انتخاب کنید.`;
+                }
+                
+                if (result.categories && result.categories.length > 0) {
+                    console.log('✅ دسته‌های دریافت شده:', result.categories);
+                    
+                    // انتخاب چک‌باکس‌های مربوطه
+                    document.querySelectorAll('.checkbox-item input').forEach(checkbox => {
+                        if (result.categories.includes(checkbox.value)) {
+                            checkbox.checked = true;
+                            console.log('☑️  انتخاب شد:', checkbox.value);
+                        }
+                    });
+                } else {
+                    console.log('⚠️  کاربر هیچ دسته‌ای انتخاب نکرده یا دسته‌ها خالی هستند');
+                    // پیش‌فرض: فناوری انتخاب شود
+                    document.getElementById('tech').checked = true;
+                }
+            } catch (error) {
+                console.error('❌ خطا در دریافت تنظیمات:', error);
+            }
+        }
+        
+        // ذخیره تنظیمات
+        document.getElementById('save-config').addEventListener('click', async function() {
+            const selectedCategories = [];
+            document.querySelectorAll('.checkbox-item input:checked').forEach(checkbox => {
+                selectedCategories.push(checkbox.value);
+            });
+            
+            console.log('📝 دسته‌های انتخاب شده:', selectedCategories);
+            
+            if (selectedCategories.length === 0) {
+                document.getElementById('config-message').textContent = 'لطفاً حداقل یک دسته را انتخاب کنید';
+                document.getElementById('config-message').style.color = 'red';
+                return;
+            }
+            
+            // ارسال به سرور
+            try {
+                const csrftoken = getCookie('csrftoken');
+                console.log('📤 ارسال دسته‌ها به سرور:', selectedCategories);
+                
+                const response = await fetch('/api/save-config/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify({ 
+                        categories: selectedCategories
+                    })
+                });
+                
+                const result = await response.json();
+                console.log('📥 پاسخ سرور:', result);
+                
+                if (result.success) {
+                    document.getElementById('config-message').textContent = 'تنظیمات با موفقیت ذخیره شد! در حال انتقال...';
+                    document.getElementById('config-message').style.color = 'green';
+                    
+                    // نمایش دسته‌های ذخیره شده
+                    console.log('💾 دسته‌های ذخیره شده:', result.categories);
+                    
+                    // انتقال به صفحه اخبار پس از 1 ثانیه
+                    setTimeout(() => {
+                        window.location.href = '/news/';
+                    }, 1000);
+                } else {
+                    document.getElementById('config-message').textContent = 'خطا: ' + (result.error || 'خطای ناشناخته');
+                    document.getElementById('config-message').style.color = 'red';
+                }
+            } catch (error) {
+                console.error('❌ خطا در ارتباط با سرور:', error);
+                document.getElementById('config-message').textContent = 'خطا در ارتباط با سرور';
+                document.getElementById('config-message').style.color = 'red';
+            }
+        });
+        
+        // خروج از سیستم
+        document.getElementById('logout-btn').addEventListener('click', async function(e) {
+            e.preventDefault();
+            
+            try {
+                const response = await fetch('/logout/');
+                alert('با موفقیت از سیستم خارج شدید');
+                window.location.href = '/';
+            } catch (error) {
+                console.error('خطا در خروج:', error);
+            }
+        });
+        
+        // اجرای بارگذاری صفحه
+        async function loadPage() {
+            const authResult = await checkAuth();
+            if (!authResult) return;
+            
+            await loadSavedCategories();
+        }
+        
+        // بارگذاری تنظیمات هنگام لود صفحه
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 صفحه config لود شد');
+            loadPage();
+        });
+        
+        // تست مستقیم API
+        window.testAPI = async function() {
+            console.log('🧪 تست API...');
+            
+            try {
+                // تست 1: وضعیت کاربر
+                const authResponse = await fetch('/api/check-auth/');
+                const authData = await authResponse.json();
+                console.log('👤 وضعیت کاربر:', authData);
+                
+                // تست 2: دریافت همه اخبار
+                const newsResponse = await fetch('/api/news/');
+                const newsData = await newsResponse.json();
+                console.log('📰 اخبار:', newsData);
+                
+                // تست 3: دسته‌بندی‌ها
+                const catResponse = await fetch('/api/categories/');
+                const catData = await catResponse.json();
+                console.log('🏷️  دسته‌بندی‌ها:', catData);
+                
+            } catch (error) {
+                console.error('❌ خطا در تست API:', error);
+            }
+        };
+    </script>
+</body>
+</html>
